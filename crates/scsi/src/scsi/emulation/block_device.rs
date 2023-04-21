@@ -25,7 +25,7 @@ pub(crate) enum MediumRotationRate {
     NonRotating,
 }
 
-pub(crate) trait BlockDeviceBackend: Send + Sync {
+pub trait BlockDeviceBackend: Send + Sync {
     fn read_exact_at(&self, buf: &mut [u8], offset: u64) -> io::Result<()>;
     fn size_in_blocks(&self) -> io::Result<u64>;
     fn block_size(&self) -> u32;
@@ -65,14 +65,14 @@ impl BlockDeviceBackend for FileBackend {
     }
 }
 
-pub(crate) struct BlockDevice<T: BlockDeviceBackend> {
+pub struct BlockDevice<T: BlockDeviceBackend> {
     backend: T,
     write_protected: bool,
     rotation_rate: MediumRotationRate,
 }
 
 impl<T: BlockDeviceBackend> BlockDevice<T> {
-    pub(crate) const fn new(backend: T) -> Self {
+    pub const fn new(backend: T) -> Self {
         Self {
             backend,
             write_protected: false,

@@ -33,7 +33,7 @@ type DescriptorChainWriter = virtio::DescriptorChainWriter<GuestMemoryLoadGuard<
 type DescriptorChainReader = virtio::DescriptorChainReader<GuestMemoryLoadGuard<GuestMemoryMmap>>;
 type Target = dyn scsi::Target<DescriptorChainWriter, DescriptorChainReader>;
 
-pub(crate) struct VhostUserScsiBackend {
+pub struct VhostUserScsiBackend {
     event_idx: bool,
     mem: Option<GuestMemoryAtomic<GuestMemoryMmap>>,
     targets: Vec<Box<Target>>,
@@ -41,7 +41,7 @@ pub(crate) struct VhostUserScsiBackend {
 }
 
 impl VhostUserScsiBackend {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             event_idx: false,
             mem: None,
@@ -166,7 +166,7 @@ impl VhostUserScsiBackend {
         }
     }
 
-    fn process_request_queue(&mut self, vring: &VringRwLock) -> Result<(), io::Error> {
+    pub fn process_request_queue(&mut self, vring: &VringRwLock) -> Result<(), io::Error> {
         let chains: Vec<_> = vring
             .get_mut()
             .get_queue_mut()
@@ -189,7 +189,7 @@ impl VhostUserScsiBackend {
         Ok(())
     }
 
-    pub(crate) fn add_target(&mut self, target: Box<Target>) {
+    pub fn add_target(&mut self, target: Box<Target>) {
         self.targets.push(target);
     }
 }

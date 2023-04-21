@@ -16,7 +16,7 @@ use log::error;
 
 use virtio_bindings::virtio_scsi::virtio_scsi_cmd_req;
 use virtio_queue::{Descriptor, DescriptorChain, DescriptorChainRwIter};
-use vm_memory::{Bytes, GuestAddress, GuestMemory};
+use vm_memory::{guest_memory, Bytes, GuestAddress, GuestMemory};
 
 /// virtio-scsi has its own format for LUNs, documented in 5.6.6.1 of virtio
 /// v1.1. This represents a LUN parsed from that format.
@@ -190,9 +190,10 @@ where
     }
 
     pub fn residual(&mut self) -> u32 {
-        let mut ret = 0;
+        let mut ret: u32 = 0;
         while let Some(current) = self.current {
-            ret += current.len() - self.offset;
+            // dbg!(current, self.offset);
+            ret = ret.saturating_add(current.len() - self.offset);
             self.offset = 0;
             self.current = self.iter.next();
         }
@@ -224,7 +225,12 @@ where
                 .memory()
                 .write(
                     &buf[..(to_write as usize)],
-                    GuestAddress(current.addr().0 + u64::from(self.offset)),
+                    GuestAddress(current.addr().0.checked_add(u64::from(self.offset)).ok_or(
+                        io::Error::new(
+                            ErrorKind::Other,
+                            guest_memory::Error::InvalidBackendAddress,
+                        ),
+                    )?),
                 )
                 .map_err(|e| io::Error::new(ErrorKind::Other, e))?;
 

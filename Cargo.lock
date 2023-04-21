@@ -1159,3 +1159,35 @@ checksum = "ee7b2c67f962bf5042bfd8b6a916178df33a26eec343ae064cb8e069f638fa6f"
 dependencies = [
  "memchr",
 ]
+
+[[patch.unused]]
+name = "vhost"
+version = "0.6.0"
+
+[[patch.unused]]
+name = "vhost-user-frontend"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "vm-memory"
+version = "0.10.0"
+
+[[patch.unused]]
+name = "virtio-bindings"
+version = "0.2.0"
+
+[[patch.unused]]
+name = "virtio-queue"
+version = "0.7.1"
+
+[[patch.unused]]
+name = "xen-bindings"
+version = "0.0.0-pre1"
+
+[[patch.unused]]
+name = "xen-ioctls"
+version = "0.0.0-pre1"
+
+[[patch.unused]]
+name = "xen-store"
+version = "0.0.0-pre1"

@@ -15,7 +15,7 @@ use super::{
     response_data::{respond_report_luns, SilentlyTruncate},
 };
 
-pub(crate) struct LunRequest<'a, W: Write, R: Read> {
+pub struct LunRequest<'a, W: Write, R: Read> {
     pub _id: u64,
     pub task_attr: TaskAttr,
     pub data_in: SilentlyTruncate<&'a mut W>,
@@ -27,7 +27,7 @@ pub(crate) struct LunRequest<'a, W: Write, R: Read> {
 }
 
 /// A single logical unit of an emulated SCSI device.
-pub(crate) trait LogicalUnit<W: Write, R: Read>: Send + Sync {
+pub trait LogicalUnit<W: Write, R: Read>: Send + Sync {
     /// Process a SCSI command sent to this logical unit.
     ///
     /// # Return value
@@ -46,20 +46,20 @@ pub(crate) trait LogicalUnit<W: Write, R: Read>: Send + Sync {
 }
 
 /// A SCSI target implemented by emulating a device within vhost-user-scsi.
-pub(crate) struct EmulatedTarget<W: Write, R: Read> {
+pub struct EmulatedTarget<W: Write, R: Read> {
     luns: Vec<Box<dyn LogicalUnit<W, R>>>,
 }
 
 impl<W: Write, R: Read> EmulatedTarget<W, R> {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self { luns: Vec::new() }
     }
 
-    pub(crate) fn add_lun(&mut self, logical_unit: Box<dyn LogicalUnit<W, R>>) {
+    pub fn add_lun(&mut self, logical_unit: Box<dyn LogicalUnit<W, R>>) {
         self.luns.push(logical_unit);
     }
 
-    pub(crate) fn luns(&self) -> impl Iterator<Item = u16> + ExactSizeIterator + '_ {
+    pub fn luns(&self) -> impl Iterator<Item = u16> + ExactSizeIterator + '_ {
         // unwrap is safe: we limit LUNs at 256
         self.luns
             .iter()

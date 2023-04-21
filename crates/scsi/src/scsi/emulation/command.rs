@@ -31,7 +31,7 @@ pub(crate) enum ReportLunsSelectReport {
 
 /// A type of "vital product data" page returned by SCSI's INQUIRY command.
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
-pub(crate) enum VpdPage {
+pub enum VpdPage {
     Ascii(u8),
     Ata,                        // *
     BlockDeviceCharacteristics, // *
@@ -63,7 +63,7 @@ pub(crate) enum VpdPage {
 
 #[derive(PartialEq, Eq, TryFromPrimitive, Debug, Copy, Clone)]
 #[repr(u8)]
-pub(crate) enum ModeSensePageControl {
+pub enum ModeSensePageControl {
     Current = 0b00,
     Changeable = 0b01,
     Default = 0b10,
@@ -140,13 +140,13 @@ impl From<VpdPage> for u8 {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub(crate) enum SenseFormat {
+pub enum SenseFormat {
     Fixed,
     Descriptor,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub(crate) enum ModePageSelection {
+pub enum ModePageSelection {
     AllPageZeros,
     Single(ModePage),
 }
@@ -157,7 +157,7 @@ pub(crate) enum LunIndependentCommand {
 }
 
 #[derive(Debug)]
-pub(crate) enum LunSpecificCommand {
+pub enum LunSpecificCommand {
     Inquiry(Option<VpdPage>),
     ModeSense6 {
         pc: ModeSensePageControl,
@@ -423,7 +423,7 @@ pub(crate) enum ParseError {
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub(crate) enum ReportSupportedOpCodesMode {
+pub enum ReportSupportedOpCodesMode {
     All,
     OneCommand(u8),
     OneServiceAction(u8, u16),

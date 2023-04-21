@@ -1,0 +1,33 @@
+[package]
+name = "vhost-device-scsi-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+vhost-user-backend = "0.8.0"
+vm-memory = "0.10.0"
+virtio-queue = { version = "0.7", features = ["test-utils"] }
+virtio-bindings = { git = "https://github.com/rust-vmm/vm-virtio", rev = "467c8ec99375a5f4e08b85b18257cd7e0bac1dc0" }
+
+
+[dependencies.vhost-device-scsi]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "random_descriptors"
+path = "fuzz_targets/random_descriptors.rs"
+test = false
+doc = false
