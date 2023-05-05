@@ -4,6 +4,7 @@ use std::{
     convert::{TryFrom, TryInto},
     fs::File,
     io::{self, Read, Write},
+    ops::Range,
     os::unix::prelude::*,
 };
 
@@ -104,6 +105,14 @@ impl<T: BlockDeviceBackend> BlockDevice<T> {
         self.backend
             .write_exact_at(&buf, lba * u64::from(self.backend.block_size()))?;
 
+        Ok(())
+    }
+
+    fn write_same_block(&self, lba_range: Range<u64>, buf: &[u8]) -> io::Result<()> {
+        let block_size = u64::from(self.backend.block_size());
+        for lba in lba_range {
+            self.backend.write_exact_at(buf, lba * block_size)?;
+        }
         Ok(())
     }
 
@@ -381,6 +390,53 @@ impl<W: Write, R: Read, T: BlockDeviceBackend> LogicalUnit<W, R> for BlockDevice
                         return Ok(CmdOutput::check_condition(sense::TARGET_FAILURE));
                     }
                 }
+
+                match write_result {
+                    Ok(()) => Ok(CmdOutput::ok()),
+                    Err(e) => {
+                        error!("Error writing to block device: {}", e);
+                        Ok(CmdOutput::check_condition(sense::TARGET_FAILURE))
+                    }
+                }
+            }
+            LunSpecificCommand::WriteSame16 {
+                lba,
+                number_of_logical_blocks,
+                unmap: _,
+                anchor,
+            } => {
+                // We do not support block provisioning
+                if anchor {
+                    return Ok(CmdOutput::check_condition(sense::INVALID_FIELD_IN_CDB));
+                }
+
+                // This command can be used to unmap/discard a region of blocks...
+                // TODO: Do something smarter and punch holes into the backend,
+                // for now we will just write A LOT of zeros in a very inefficient way.
+
+                let size = match self.backend.size_in_blocks() {
+                    Ok(size) => size,
+                    Err(e) => {
+                        error!("Error getting image size for read: {}", e);
+                        return Ok(CmdOutput::check_condition(sense::UNRECOVERED_READ_ERROR));
+                    }
+                };
+
+                if lba + u64::from(number_of_logical_blocks) > size {
+                    return Ok(CmdOutput::check_condition(
+                        sense::LOGICAL_BLOCK_ADDRESS_OUT_OF_RANGE,
+                    ));
+                }
+
+                let mut buf = vec![0; self.backend.block_size() as usize];
+                let read_result = req.data_out.read_exact(&mut buf);
+                if let Err(e) = read_result {
+                    error!("Error reading from data_out: {}", e);
+                    return Ok(CmdOutput::check_condition(sense::TARGET_FAILURE));
+                }
+
+                let write_result =
+                    self.write_same_block(lba..(lba + u64::from(number_of_logical_blocks)), &buf);
 
                 match write_result {
                     Ok(()) => Ok(CmdOutput::ok()),
