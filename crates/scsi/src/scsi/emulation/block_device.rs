@@ -27,6 +27,7 @@ pub(crate) enum MediumRotationRate {
 
 pub(crate) trait BlockDeviceBackend: Send + Sync {
     fn read_exact_at(&self, buf: &mut [u8], offset: u64) -> io::Result<()>;
+    fn write_exact_at(&self, buf: &[u8], offset: u64) -> io::Result<()>;
     fn size_in_blocks(&self) -> io::Result<u64>;
     fn block_size(&self) -> u32;
     fn sync(&mut self) -> io::Result<()>;
@@ -48,6 +49,10 @@ impl FileBackend {
 impl BlockDeviceBackend for FileBackend {
     fn read_exact_at(&self, buf: &mut [u8], offset: u64) -> io::Result<()> {
         self.file.read_exact_at(buf, offset)
+    }
+
+    fn write_exact_at(&self, buf: &[u8], offset: u64) -> io::Result<()> {
+        self.file.write_all_at(buf, offset)
     }
 
     fn size_in_blocks(&self) -> io::Result<u64> {
@@ -90,6 +95,16 @@ impl<T: BlockDeviceBackend> BlockDevice<T> {
             .read_exact_at(&mut ret[..], lba * u64::from(self.backend.block_size()))?;
 
         Ok(ret)
+    }
+
+    fn write_blocks(&self, lba: u64, blocks: u64, reader: &mut impl Read) -> io::Result<()> {
+        // TODO: Avoid the copies here.
+        let mut buf = vec![0; (blocks * u64::from(self.backend.block_size())) as usize];
+        reader.read_exact(&mut buf)?;
+        self.backend
+            .write_exact_at(&buf, lba * u64::from(self.backend.block_size()))?;
+
+        Ok(())
     }
 
     pub(crate) fn set_write_protected(&mut self, wp: bool) {
@@ -328,6 +343,50 @@ impl<W: Write, R: Read, T: BlockDeviceBackend> LogicalUnit<W, R> for BlockDevice
                     Err(e) => {
                         error!("Error reading image: {}", e);
                         Ok(CmdOutput::check_condition(sense::UNRECOVERED_READ_ERROR))
+                    }
+                }
+            }
+            LunSpecificCommand::Write10 {
+                dpo,
+                fua,
+                lba,
+                transfer_length,
+            } => {
+                if dpo {
+                    // DPO is just a hint that the guest probably won't access
+                    // this any time soon, so we can ignore it
+                    debug!("Silently ignoring DPO flag");
+                }
+
+                let size = match self.backend.size_in_blocks() {
+                    Ok(size) => size,
+                    Err(e) => {
+                        error!("Error getting image size for read: {}", e);
+                        return Ok(CmdOutput::check_condition(sense::TARGET_FAILURE));
+                    }
+                };
+
+                if u64::from(lba) + u64::from(transfer_length) > size {
+                    return Ok(CmdOutput::check_condition(
+                        sense::LOGICAL_BLOCK_ADDRESS_OUT_OF_RANGE,
+                    ));
+                }
+
+                let write_result =
+                    self.write_blocks(u64::from(lba), u64::from(transfer_length), req.data_out);
+
+                if fua {
+                    if let Err(e) = self.backend.sync() {
+                        error!("Error syncing file: {}", e);
+                        return Ok(CmdOutput::check_condition(sense::TARGET_FAILURE));
+                    }
+                }
+
+                match write_result {
+                    Ok(()) => Ok(CmdOutput::ok()),
+                    Err(e) => {
+                        error!("Error writing to block device: {}", e);
+                        Ok(CmdOutput::check_condition(sense::TARGET_FAILURE))
                     }
                 }
             }
