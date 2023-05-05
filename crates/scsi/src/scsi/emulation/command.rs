@@ -198,6 +198,7 @@ pub(crate) enum LunSpecificCommand {
     },
     RequestSense(SenseFormat),
     TestUnitReady,
+    SynchronizeCache10,
 }
 
 #[derive(Debug)]
@@ -219,6 +220,7 @@ pub(crate) enum CommandType {
     TestUnitReady,
     Write10,
     WriteSame16,
+    SynchronizeCache10,
 }
 
 pub(crate) const OPCODES: &[(CommandType, (u8, Option<u16>))] = &[
@@ -229,6 +231,7 @@ pub(crate) const OPCODES: &[(CommandType, (u8, Option<u16>))] = &[
     (CommandType::ReadCapacity10, (0x25, None)),
     (CommandType::Read10, (0x28, None)),
     (CommandType::Write10, (0x2a, None)),
+    (CommandType::SynchronizeCache10, (0x35, None)),
     (CommandType::WriteSame16, (0x93, None)),
     (CommandType::ReadCapacity16, (0x9e, Some(0x10))),
     (CommandType::ReportLuns, (0xa0, None)),
@@ -444,6 +447,18 @@ impl CommandType {
                 0b0000_0000,
                 0b0000_0100,
             ],
+            Self::SynchronizeCache10 => &[
+                0x53,
+                0b0000_0010,
+                0b1111_1111,
+                0b1111_1111,
+                0b1111_1111,
+                0b1111_1111,
+                0b0011_1111,
+                0b1111_1111,
+                0b1111_1111,
+                0b0000_0100,
+            ],
         }
     }
 }
@@ -599,6 +614,11 @@ impl Cdb {
                     naca: (cdb[15] & 0b0000_0100) != 0,
                 })
             }
+            CommandType::SynchronizeCache10 => Ok(Self {
+                command: Command::LunSpecificCommand(LunSpecificCommand::SynchronizeCache10),
+                allocation_length: None,
+                naca: (cdb[9] & 0b0000_0100) != 0,
+            }),
             CommandType::ReadCapacity10 => Ok(Self {
                 command: Command::LunSpecificCommand(LunSpecificCommand::ReadCapacity10),
                 allocation_length: None,

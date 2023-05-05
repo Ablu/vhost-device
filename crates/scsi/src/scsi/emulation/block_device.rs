@@ -664,6 +664,16 @@ impl<W: Write, R: Read, T: BlockDeviceBackend> LogicalUnit<W, R> for BlockDevice
                     }
                 }
             }
+            LunSpecificCommand::SynchronizeCache10 => {
+                // While SCSI allows just syncing a range, we just sync the entire file
+                match self.backend.sync() {
+                    Ok(()) => Ok(CmdOutput::ok()),
+                    Err(e) => {
+                        error!("Error syncing block device: {}", e);
+                        Ok(CmdOutput::check_condition(sense::TARGET_FAILURE))
+                    }
+                }
+            }
         }
     }
 }
