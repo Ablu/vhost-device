@@ -14,7 +14,7 @@ use vm_memory::mmap::NewBitmap;
 use clap::Parser;
 use thiserror::Error as ThisError;
 use vhost::{vhost_user, vhost_user::Listener};
-use vhost_user_backend::{VhostUserBackend, VhostUserBackendMut, VhostUserDaemon, VringT};
+use vhost_user_backend::{VhostUserBackendMut, VhostUserDaemon};
 use vm_memory::{GuestMemoryAtomic, GuestMemoryMmap};
 
 use crate::gpio::{GpioController, GpioDevice, PhysDevice};
@@ -126,11 +126,11 @@ impl TryFrom<GpioArgs> for GpioConfiguration {
     }
 }
 
-fn common_start<S, V, B>(backend: S, name: &str, socket: String)
+fn common_start<T>(backend: T, name: &str, socket: String)
 where
-    S: VhostUserBackendMut<V, B> + 'static,
-    B: NewBitmap + Send + Sync + Clone + 'static,
-    V: VringT<GuestMemoryAtomic<GuestMemoryMmap<B>>> + Clone + Send + Sync + 'static,
+    T: VhostUserBackendMut + 'static,
+    T::Bitmap: NewBitmap + Clone + Send + Sync,
+    T::Vring: Clone + Send + Sync,
 {
     let listener = Listener::new(socket, true).unwrap();
     let backend = Arc::new(RwLock::new(backend));

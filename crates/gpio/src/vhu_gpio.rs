@@ -379,9 +379,10 @@ impl<D: GpioDevice> VhostUserGpioBackend<D> {
 }
 
 /// VhostUserBackendMut trait methods
-impl<D: 'static + GpioDevice + Sync + Send> VhostUserBackendMut<VringRwLock, ()>
-    for VhostUserGpioBackend<D>
-{
+impl<D: GpioDevice> VhostUserBackendMut for VhostUserGpioBackend<D> {
+    type Bitmap = ();
+    type Vring = VringRwLock;
+
     fn num_queues(&self) -> usize {
         NUM_QUEUES
     }
