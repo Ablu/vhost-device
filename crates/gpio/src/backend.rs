@@ -9,11 +9,12 @@ use log::{info, warn};
 use std::num::ParseIntError;
 use std::sync::{Arc, RwLock};
 use std::thread::spawn;
+use vm_memory::mmap::NewBitmap;
 
 use clap::Parser;
 use thiserror::Error as ThisError;
 use vhost::{vhost_user, vhost_user::Listener};
-use vhost_user_backend::VhostUserDaemon;
+use vhost_user_backend::{VhostUserBackend, VhostUserBackendMut, VhostUserDaemon, VringT};
 use vm_memory::{GuestMemoryAtomic, GuestMemoryMmap};
 
 use crate::gpio::{GpioController, GpioDevice, PhysDevice};
@@ -125,6 +126,43 @@ impl TryFrom<GpioArgs> for GpioConfiguration {
     }
 }
 
+fn common_start<S, V, B>(backend: S, name: &str, socket: String)
+where
+    S: VhostUserBackendMut<V, B> + 'static,
+    B: NewBitmap + Send + Sync + Clone + 'static,
+    V: VringT<GuestMemoryAtomic<GuestMemoryMmap<B>>> + Clone + Send + Sync + 'static,
+{
+    let listener = Listener::new(socket, true).unwrap();
+    let backend = Arc::new(RwLock::new(backend));
+
+    let mut daemon = VhostUserDaemon::new(
+        name.into(),
+        backend.clone(),
+        GuestMemoryAtomic::new(GuestMemoryMmap::new()),
+    )
+    .unwrap();
+
+    daemon.start(listener).unwrap();
+
+    match daemon.wait() {
+        Ok(()) => {
+            info!("Stopping cleanly.");
+        }
+        Err(vhost_user_backend::Error::HandleRequest(vhost_user::Error::PartialMessage)) => {
+            info!("vhost-user connection closed with partial message. If the VM is shutting down, this is expected behavior; otherwise, it might be a bug.");
+        }
+        Err(e) => {
+            warn!("Error running daemon: {:?}", e);
+        }
+    }
+
+    // No matter the result, we need to shut down the worker thread.
+    let exit_event = backend.read().unwrap().exit_event(0);
+    if let Some(event) = exit_event {
+        event.write(1).unwrap();
+    }
+}
+
 fn start_backend<D: 'static + GpioDevice + Send + Sync>(args: GpioArgs) -> Result<()> {
     let config = GpioConfiguration::try_from(args).unwrap();
     let mut handles = Vec::new();
@@ -144,34 +182,8 @@ fn start_backend<D: 'static + GpioDevice + Send + Sync>(args: GpioArgs) -> Resul
             // daemon.
             let device = D::open(device_num).unwrap();
             let controller = GpioController::<D>::new(device).unwrap();
-            let backend = Arc::new(RwLock::new(VhostUserGpioBackend::new(controller).unwrap()));
-            let listener = Listener::new(socket.clone(), true).unwrap();
-
-            let mut daemon = VhostUserDaemon::new(
-                String::from("vhost-device-gpio-backend"),
-                backend.clone(),
-                GuestMemoryAtomic::new(GuestMemoryMmap::new()),
-            )
-            .unwrap();
-
-            daemon.start(listener).unwrap();
-
-            match daemon.wait() {
-                Ok(()) => {
-                    info!("Stopping cleanly.");
-                }
-                Err(vhost_user_backend::Error::HandleRequest(
-                    vhost_user::Error::PartialMessage,
-                )) => {
-                    info!("vhost-user connection closed with partial message. If the VM is shutting down, this is expected behavior; otherwise, it might be a bug.");
-                }
-                Err(e) => {
-                    warn!("Error running daemon: {:?}", e);
-                }
-            }
-
-            // No matter the result, we need to shut down the worker thread.
-            backend.read().unwrap().exit_event.write(1).unwrap();
+            let backend = VhostUserGpioBackend::new(controller).unwrap();
+            common_start(backend, "vhost-device-gpio-backend", socket.clone());
         });
 
         handles.push(handle);
