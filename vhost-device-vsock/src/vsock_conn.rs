@@ -382,7 +382,7 @@ mod tests {
 
     use super::*;
     use crate::vhu_vsock::{VSOCK_HOST_CID, VSOCK_OP_RW, VSOCK_TYPE_STREAM};
-    use std::io::Result as IoResult;
+    use std::io::{Cursor, Result as IoResult};
     use std::ops::Deref;
     use virtio_bindings::bindings::virtio_ring::{VRING_DESC_F_NEXT, VRING_DESC_F_WRITE};
     use virtio_queue::{mock::MockSplitQueue, Descriptor, DescriptorChain, Queue, QueueOwnedT};
@@ -482,31 +482,29 @@ mod tests {
     }
 
     struct VsockDummySocket {
-        data: Vec<u8>,
+        data: Cursor<Vec<u8>>,
     }
 
     impl VsockDummySocket {
         fn new() -> Self {
-            Self { data: Vec::new() }
+            Self {
+                data: Cursor::new(Vec::new()),
+            }
         }
     }
 
     impl Write for VsockDummySocket {
         fn write(&mut self, buf: &[u8]) -> std::result::Result<usize, std::io::Error> {
-            self.data.clear();
-            self.data.extend_from_slice(buf);
-
-            Ok(buf.len())
+            self.data.write(buf)
         }
         fn flush(&mut self) -> IoResult<()> {
-            Ok(())
+            self.data.flush()
         }
     }
 
     impl Read for VsockDummySocket {
         fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
-            buf[..self.data.len()].copy_from_slice(&self.data);
-            Ok(self.data.len())
+            self.data.read(buf)
         }
     }
 
